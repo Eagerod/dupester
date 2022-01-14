@@ -1,0 +1,6 @@
+version: "2.4"
+services:
+  tika:
+    image: apache/tika
+    ports:
+      - 9998:9998
