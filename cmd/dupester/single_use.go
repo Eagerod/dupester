@@ -17,8 +17,8 @@ import (
 )
 
 type ESDoc struct {
-	Source string
-	Body string
+	Source string `json:"source"`
+	Body string `json:"body"`
 }
 
 func runCmd() *cobra.Command {
@@ -62,17 +62,44 @@ func runCmd() *cobra.Command {
 				return err
 			}
 
-			req := esapi.IndexRequest{
+			var buf bytes.Buffer
+			query := map[string]interface{}{
+			  "query": map[string]interface{}{
+				"more_like_this": map[string]interface{}{
+				  "fields": []string{"body"},
+				  "like": o.Body,
+				  "min_term_freq": 1,
+				  "min_doc_freq": 1,
+				  "max_query_terms": 1000,
+				  "analyzer": "whitespace",
+				},
+			  },
+			}
+
+			if err := json.NewEncoder(&buf).Encode(query); err != nil {
+			  return fmt.Errorf("Error encoding query: %s", err)
+			}
+
+			// Perform the search request.
+			res, err := elasticsearchClient.Search(
+				elasticsearchClient.Search.WithContext(context.Background()),
+				elasticsearchClient.Search.WithIndex("test"),
+				elasticsearchClient.Search.WithBody(&buf),
+			)
+
+			fmt.Println(res)
+
+			indexRequest := esapi.IndexRequest{
 				Index:      "test",
 				Body:       bytes.NewReader(b),
 			  }
 
-			res, err := req.Do(rContext, elasticsearchClient)
+			indexResponse, err := indexRequest.Do(rContext, elasticsearchClient)
 			if err != nil {
 				return err
 			}
 
-			fmt.Println(res)
+			fmt.Println(indexResponse)
 
 			return nil
 		},
