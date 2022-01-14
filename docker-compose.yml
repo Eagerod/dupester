@@ -4,3 +4,16 @@ services:
     image: apache/tika
     ports:
       - 9998:9998
+  elasticsearch:
+    image: elasticsearch:7.16.3
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      - discovery.type=single-node
+    volumes:
+      - dupesterdata:/usr/share/elasticsearch/data
+
+volumes:
+  dupesterdata:
+    driver: local
