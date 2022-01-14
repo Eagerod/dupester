@@ -3,9 +3,13 @@ package dupester
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+    "io/ioutil"
 	"os"
+    "regexp"
 	"strings"
 )
 
@@ -18,6 +22,7 @@ import (
 
 type ESDoc struct {
 	Source string `json:"source"`
+	OriginalBody string `json:"originalBody"`
 	Body string `json:"body"`
 }
 
@@ -38,25 +43,36 @@ func runCmd() *cobra.Command {
 				return err
 			}
 
-			bs, err := tikaClient.ParseRecursive(rContext, file)
+			fileContents, err := ioutil.ReadFile(args[0])
 			if err != nil {
 				return err
 			}
+			hash := sha256.Sum256(fileContents)
+
+			bodyArray, err := tikaClient.ParseRecursive(rContext, file)
+			if err != nil {
+				return err
+			}
+
+			originalBody := strings.Join(bodyArray, "\n")
+
+			re := regexp.MustCompile("[\\.$-/:-?{-~!\"^_`\\[\\]]")
+			bodyString := re.ReplaceAllString(originalBody, " ")
 
 			elasticsearchServerUrl := "http://dev.internal.aleemhaji.com:9200"
 
 			esCfg := es.Config{
 				Addresses: []string{
-				elasticsearchServerUrl,
+					elasticsearchServerUrl,
 				},
-			  }
+			}
 
 			elasticsearchClient, err := es.NewClient(esCfg)
 			if err != nil {
 				return err
 			}
 
-			o := ESDoc{args[0], strings.Join(bs, "\n")}
+			o := ESDoc{args[0], originalBody, bodyString}
 			b, err := json.Marshal(o)
 			if err != nil {
 				return err
@@ -90,6 +106,7 @@ func runCmd() *cobra.Command {
 			fmt.Println(res)
 
 			indexRequest := esapi.IndexRequest{
+				DocumentID: hex.EncodeToString(hash[:]),
 				Index:      "test",
 				Body:       bytes.NewReader(b),
 			  }
