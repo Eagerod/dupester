@@ -85,6 +85,26 @@ func (dupester *Dupester) ParseFile(path string) (*ExtractedDocument, error) {
 
 func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument, error) {
 	var buf bytes.Buffer
+
+	res, err := dupester.elasticsearchClient.Get("test", doc.Hash)
+	if err != nil {
+		return nil, err
+	}
+
+	var getWrapper = struct {
+		Found bool `json:"found"`
+		Source ExtractedDocument `json:"_source"`
+	} {}
+
+    err = json.Unmarshal(buf.Bytes(), &getWrapper)
+	if err != nil {
+		return nil, nil
+	}
+
+	if getWrapper.Found {
+		return nil, fmt.Errorf("Duplicate document found with hash: %s (%s)", doc.Hash, getWrapper.Source.Source)
+	}
+
 	query := map[string]interface{}{
 	  "query": map[string]interface{}{
 		"more_like_this": map[string]interface{}{
@@ -102,7 +122,7 @@ func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument,
 	  return nil, fmt.Errorf("Error encoding query: %s", err)
 	}
 
-	res, err := dupester.elasticsearchClient.Search(
+	res, err = dupester.elasticsearchClient.Search(
 		dupester.elasticsearchClient.Search.WithContext(context.Background()),
 		dupester.elasticsearchClient.Search.WithIndex("test"),
 		dupester.elasticsearchClient.Search.WithBody(&buf),
