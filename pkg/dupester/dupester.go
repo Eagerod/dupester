@@ -7,9 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-    "io/ioutil"
+	"io/ioutil"
 	"os"
-    "regexp"
+	"regexp"
 	"strings"
 )
 
@@ -20,14 +20,14 @@ import (
 )
 
 type ExtractedDocument struct {
-	Source string `json:"source"`
-	Hash string `json:"hash"`
+	Source       string `json:"source"`
+	Hash         string `json:"hash"`
 	OriginalBody string `json:"originalBody"`
-	Body string `json:"body"`
+	Body         string `json:"body"`
 }
 
 type Dupester struct {
-	tikaClient *tika.Client
+	tikaClient          *tika.Client
 	elasticsearchClient *es.Client
 }
 
@@ -79,7 +79,7 @@ func (dupester *Dupester) ParseFile(path string) (*ExtractedDocument, error) {
 	rv.Hash = hex.EncodeToString(hash[:])
 	rv.OriginalBody = originalBody
 	rv.Body = bodyString
-	
+
 	return rv, nil
 }
 
@@ -91,14 +91,16 @@ func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument,
 		return nil, err
 	}
 
-	var getWrapper = struct {
-		Found bool `json:"found"`
-		Source ExtractedDocument `json:"_source"`
-	} {}
+	buf.ReadFrom(res.Body)
 
-    err = json.Unmarshal(buf.Bytes(), &getWrapper)
+	var getWrapper = struct {
+		Found  bool              `json:"found"`
+		Source ExtractedDocument `json:"_source"`
+	}{}
+
+	err = json.Unmarshal(buf.Bytes(), &getWrapper)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	if getWrapper.Found {
@@ -106,20 +108,20 @@ func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument,
 	}
 
 	query := map[string]interface{}{
-	  "query": map[string]interface{}{
-		"more_like_this": map[string]interface{}{
-		  "fields": []string{"body"},
-		  "like": doc.Body,
-		  "min_term_freq": 1,
-		  "min_doc_freq": 1,
-		  "max_query_terms": 1000,
-		  "analyzer": "whitespace",
+		"query": map[string]interface{}{
+			"more_like_this": map[string]interface{}{
+				"fields":          []string{"body"},
+				"like":            doc.Body,
+				"min_term_freq":   1,
+				"min_doc_freq":    1,
+				"max_query_terms": 1000,
+				"analyzer":        "whitespace",
+			},
 		},
-	  },
 	}
 
 	if err := json.NewEncoder(&buf).Encode(query); err != nil {
-	  return nil, fmt.Errorf("Error encoding query: %s", err)
+		return nil, fmt.Errorf("Error encoding query: %s", err)
 	}
 
 	res, err = dupester.elasticsearchClient.Search(
@@ -136,17 +138,17 @@ func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument,
 		return nil, fmt.Errorf("Failed to query more like this, %s", res.Body)
 	}
 
-    buf.ReadFrom(res.Body)
+	buf.ReadFrom(res.Body)
 
 	var esWrapper = struct {
 		Hits struct {
 			Hits []struct {
 				Source ExtractedDocument `json:"_source"`
-			 } `json:"hits"`
+			} `json:"hits"`
 		} `json:"hits"`
-	} {}
+	}{}
 
-    err = json.Unmarshal(buf.Bytes(), &esWrapper)
+	err = json.Unmarshal(buf.Bytes(), &esWrapper)
 	if err != nil {
 		return nil, nil
 	}
@@ -169,14 +171,16 @@ func (dupester *Dupester) Save(doc *ExtractedDocument) error {
 		DocumentID: doc.Hash,
 		Index:      "test",
 		Body:       bytes.NewReader(b),
-	  }
+	}
 
 	indexResponse, err := indexRequest.Do(context.Background(), dupester.elasticsearchClient)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(indexResponse)
+	if indexResponse.StatusCode != 201 {
+		return fmt.Errorf("Failed to create document: %s", doc.Source)
+	}
 
 	return nil
 }

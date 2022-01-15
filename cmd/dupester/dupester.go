@@ -12,7 +12,7 @@ func rootCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "dupester",
 		Short: "command line tool for finding duplicates, or something",
-		Args: cobra.ArbitraryArgs,
+		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Root")
 			return nil

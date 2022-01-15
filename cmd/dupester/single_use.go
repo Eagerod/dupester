@@ -13,9 +13,9 @@ import (
 )
 
 type ESDoc struct {
-	Source string `json:"source"`
+	Source       string `json:"source"`
 	OriginalBody string `json:"originalBody"`
-	Body string `json:"body"`
+	Body         string `json:"body"`
 }
 
 func runCmd() *cobra.Command {
