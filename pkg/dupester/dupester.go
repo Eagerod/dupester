@@ -83,7 +83,7 @@ func (dupester *Dupester) ParseFile(path string) (*ExtractedDocument, error) {
 	return rv, nil
 }
 
-func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument, error) {
+func (dupester *Dupester) FindIdentical(doc *ExtractedDocument) (*ExtractedDocument, error) {
 	var buf bytes.Buffer
 
 	res, err := dupester.elasticsearchClient.Get("test", doc.Hash)
@@ -104,9 +104,13 @@ func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument,
 	}
 
 	if getWrapper.Found {
-		return nil, fmt.Errorf("Duplicate document found with hash: %s (%s)", doc.Hash, getWrapper.Source.Source)
+		return &getWrapper.Source, nil
 	}
+	return nil, nil
+}
 
+func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument, error) {
+	var buf bytes.Buffer
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
 			"more_like_this": map[string]interface{}{
@@ -124,7 +128,7 @@ func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument,
 		return nil, fmt.Errorf("Error encoding query: %s", err)
 	}
 
-	res, err = dupester.elasticsearchClient.Search(
+	res, err := dupester.elasticsearchClient.Search(
 		dupester.elasticsearchClient.Search.WithContext(context.Background()),
 		dupester.elasticsearchClient.Search.WithIndex("test"),
 		dupester.elasticsearchClient.Search.WithBody(&buf),
@@ -134,10 +138,17 @@ func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument,
 		return nil, err
 	}
 
+	// Index not found, so definitely no documents found.
+	rv := []ExtractedDocument{}
+	if res.StatusCode == 404 {
+		return rv, nil
+	}
+
 	if res.StatusCode != 200 {
 		return nil, fmt.Errorf("Failed to query more like this, %s", res.Body)
 	}
 
+	buf.Reset()
 	buf.ReadFrom(res.Body)
 
 	var esWrapper = struct {
@@ -153,7 +164,6 @@ func (dupester *Dupester) FindLike(doc *ExtractedDocument) ([]ExtractedDocument,
 		return nil, nil
 	}
 
-	rv := []ExtractedDocument{}
 	for _, o := range esWrapper.Hits.Hits {
 		rv = append(rv, o.Source)
 	}
