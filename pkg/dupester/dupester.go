@@ -9,14 +9,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"regexp"
-	"strings"
 )
 
 import (
 	es "github.com/elastic/go-elasticsearch/v7"
 	esapi "github.com/elastic/go-elasticsearch/v7/esapi"
 	"github.com/google/go-tika/tika"
+)
+
+import (
+	"github.com/Eagerod/dupester/pkg/content"
 )
 
 type ExtractedDocument struct {
@@ -69,15 +71,12 @@ func (dupester *Dupester) ParseFile(path string) (*ExtractedDocument, error) {
 		return nil, err
 	}
 
-	originalBody := strings.Join(bodyLines, "\n")
-
-	re := regexp.MustCompile("[\\.$-/:-?{-~!\"^_`\\[\\]]")
-	bodyString := re.ReplaceAllString(originalBody, " ")
+	bodyString := content.NormalizeContents(bodyLines)
 
 	rv := &ExtractedDocument{}
 	rv.Source = path
 	rv.Hash = hex.EncodeToString(hash[:])
-	rv.OriginalBody = originalBody
+	rv.OriginalBody = string(fileContents)
 	rv.Body = bodyString
 
 	return rv, nil
